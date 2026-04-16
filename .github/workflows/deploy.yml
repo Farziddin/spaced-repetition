@@ -1,0 +1,46 @@
+name: Deploy
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    name: Deploy to Server
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT || 22 }}
+          script: |
+            set -e
+
+            # Loyiha papkasiga o'tish
+            cd ${{ secrets.PROJECT_PATH }}
+
+            # Oxirgi o'zgarishlarni olish
+            git pull origin main
+
+            # proxy_network mavjud bo'lmasa yaratish
+            docker network inspect proxy_network >/dev/null 2>&1 || \
+              docker network create proxy_network
+
+            # Konteynerlarni qayta qurish va ishga tushirish
+            docker compose pull --ignore-buildable
+            docker compose build --no-cache
+            docker compose up -d --remove-orphans
+
+            # Eskirgan imagelarni tozalash
+            docker image prune -f
+
+            echo "✅ Deploy muvaffaqiyatli yakunlandi!"
+
